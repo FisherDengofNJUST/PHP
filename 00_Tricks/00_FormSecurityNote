@@ -1,0 +1,55 @@
+关于 PHP 表单安全性的重要提示
+$_SERVER["PHP_SELF"] 变量能够被黑客利用！
+如果您的页面使用了 PHP_SELF，用户能够输入下划线然后执行跨站点脚本（XSS）。
+提示：跨站点脚本（Cross-site scripting，XSS）是一种计算机安全漏洞类型，常见于 Web 应用程序。XSS 能够使攻击者向其他用户浏览的网页中输入客户端脚本。
+假设我们的一张名为 "test_form.php" 的页面中有如下表单：
+<form method="post" action="<?php echo $_SERVER["PHP_SELF"];?>">
+现在，如果用户进入的是地址栏中正常的 URL："http://www.example.com/test_form.php"，上面的代码会转换为：
+<form method="post" action="test_form.php">
+到目前，一切正常。
+不过，如果用户在地址栏中键入了如下 URL：
+http://www.example.com/test_form.php/%22%3E%3Cscript%3Ealert('hacked')%3C/script%3E
+在这种情况下，上面的代码会转换为：
+<form method="post" action="test_form.php"/><script>alert('hacked')</script>
+这段代码加入了一段脚本和一个提示命令。并且当此页面加载后，就会执行 JavaScript 代码（用户会看到一个提示框）。这仅仅是一个关于 PHP_SELF 变量如何被利用的简单无害案例。
+您应该意识到 <script> 标签内能够添加任何 JavaScript 代码！黑客能够把用户重定向到另一台服务器上的某个文件，该文件中的恶意代码能够更改全局变量或将表单提交到其他地址以保存用户数据，等等。
+如果避免 $_SERVER["PHP_SELF"] 被利用？
+通过使用 htmlspecialchars() 函数能够避免 $_SERVER["PHP_SELF"] 被利用。
+表单代码是这样的：
+<form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>">
+htmlspecialchars() 函数把特殊字符转换为 HTML 实体。现在，如果用户试图利用 PHP_SELF 变量，会导致如下输出：
+<form method="post" action="test_form.php/"><script>alert('hacked')</script>">
+无法利用，没有危害！
+通过 PHP 验证表单数据
+我们要做的第一件事是通过 PHP 的 htmlspecialchars() 函数传递所有变量。
+在我们使用 htmlspecialchars() 函数后，如果用户试图在文本字段中提交以下内容：
+<script>location.href('http://www.hacked.com')</script>
+- 代码不会执行，因为会被保存为转义代码，就像这样：
+&lt;script&gt;location.href('http://www.hacked.com')&lt;/script&gt;
+现在这条代码显示在页面上或 e-mail 中是安全的。
+在用户提交该表单时，我们还要做两件事：
+	1. （通过 PHP trim() 函数）去除用户输入数据中不必要的字符（多余的空格、制表符、换行）
+	2. （通过 PHP stripslashes() 函数）删除用户输入数据中的反斜杠（\）
+接下来我们创建一个检查函数（相比一遍遍地写代码，这样效率更好）。
+我们把函数命名为 test_input()。
+现在，我们能够通过 test_input() 函数检查每个 $_POST 变量，脚本是这样的：
+实例
+<?php
+// 定义变量并设置为空值
+$name = $email = $gender = $comment = $website = "";
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+  $name = test_input($_POST["name"]);
+  $email = test_input($_POST["email"]);
+  $website = test_input($_POST["website"]);
+  $comment = test_input($_POST["comment"]);
+  $gender = test_input($_POST["gender"]);
+}
+function test_input($data) {
+  $data = trim($data);
+  $data = stripslashes($data);
+  $data = htmlspecialchars($data);
+  return $data;
+}
+?>
+
+来自 <http://www.w3school.com.cn/php/php_form_validation.asp> 
